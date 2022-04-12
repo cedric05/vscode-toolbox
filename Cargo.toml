@@ -7,16 +7,11 @@ rust-version = "1.56"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[[bin]]
-name = "vs_toolbox"
-path = "src/main.rs"
-
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-eframe = {version="0.17.0"} # Gives us egui, epi and web+native backends
-
+eframe = {version="0.17.0", features=["persistence"]}
 serde = { version = "1", features = ["derive"]}
 serde_json = { version = "1"}
 urlparse="0.7.3"
@@ -25,20 +20,8 @@ rusqlite = { version = "0.27.0", features = ["bundled"] }
 dirs-sys = "0.3.6"
 strum = {version="0.24.0", features=["derive"]}
 
-[features]
-default = ["persistence"]
-persistence = ["eframe/persistence"] # Enable if you want to persist app state on shutdown
-
 [profile.release]
 opt-level = 2 # fast and small wasm
-
-[patch.crates-io]
-
-# If you want to use the bleeding edge version of `egui`:
-# eframe = { git = "https://github.com/emilk/egui", branch = "master" }
-
-# If you fork https://github.com/emilk/egui you can test with:
-# eframe = { path = "../egui/eframe" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.6"

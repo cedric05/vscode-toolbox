@@ -7,11 +7,10 @@ use eframe::{
 };
 
 use crate::{utils::open_window, vscode::*};
-/// We derive Deserialize/Serialize so we can persist app state on shutdown.
-#[cfg_attr(feature = "persistence", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(feature = "persistence", serde(default))] // if we add new fields, give them default values when deserializing old state
+
+#[derive(serde::Deserialize, serde::Serialize)]
 pub struct Toolbox {
-    #[cfg_attr(feature = "persistence", serde(skip))]
+    #[serde(skip)]
     pub cached: Vec<VscodeEntries>,
     pub filter_options: FilterOptions,
     // pub pinned: Vec<(Entry, VscodeInstances)>,
@@ -28,8 +27,8 @@ impl Default for Toolbox {
 }
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
-#[cfg_attr(feature = "persistence", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(feature = "persistence", serde(default))] // if we add new fields, give them default values when deserializing old state
+#[derive(serde::Deserialize, serde::Serialize)]
+#[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct FilterOptions {
     pub search_text: String,
     pub show_vscode_insiders: bool,
@@ -105,17 +104,11 @@ impl epi::App for Toolbox {
         _frame: &epi::Frame,
         _storage: Option<&dyn epi::Storage>,
     ) {
-        // Load previous app state (if any).
-        // Note that you must enable the `persistence` feature for this to work.
-        #[cfg(feature = "persistence")]
         if let Some(storage) = _storage {
             *self = epi::get_value(storage, epi::APP_KEY).unwrap_or_default()
         }
     }
 
-    /// Called by the frame work to save state before shutdown.
-    /// Note that you must enable the `persistence` feature for this to work.
-    #[cfg(feature = "persistence")]
     fn save(&mut self, storage: &mut dyn epi::Storage) {
         epi::set_value(storage, epi::APP_KEY, self);
     }
