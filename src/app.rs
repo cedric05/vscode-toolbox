@@ -13,7 +13,7 @@ pub struct Toolbox {
     #[serde(skip)]
     pub cached: Vec<VscodeEntries>,
     pub filter_options: FilterOptions,
-    // pub pinned: Vec<(Entry, VscodeInstances)>,
+    pub pinned: Vec<(Entry, VscodeInstances)>,
 }
 
 impl Default for Toolbox {
@@ -21,7 +21,7 @@ impl Default for Toolbox {
         Self {
             cached: vec![],
             filter_options: Default::default(),
-            // pinned: Default::default(),
+            pinned: Default::default(),
         }
     }
 }
@@ -67,19 +67,48 @@ enum Remote {
     Devcontainer,
     Windows,
     Ssh,
+    RemoteRepository,
     Unknown,
 }
 
-impl ToString for Remote {
-    fn to_string(&self) -> String {
+impl Remote {
+    fn get_proto(&self) -> &'static str {
         match self {
             Remote::Wsl => "wsl",
             Remote::Devcontainer => "dev-container",
             Remote::Windows => "windows",
             Remote::Ssh => "ssh",
+            Remote::RemoteRepository => "vscode-vfs",
             Remote::Unknown => "unknown",
         }
-        .to_string()
+    }
+
+    fn get_remote_authority(remote_authority: &str) -> Option<Remote> {
+        for remote in [
+            Remote::Wsl,
+            Remote::Devcontainer,
+            Remote::Windows,
+            Remote::Ssh,
+            Remote::RemoteRepository,
+            Remote::Unknown,
+        ] {
+            if remote_authority.starts_with(remote.get_proto()) {
+                return Some(remote);
+            }
+        }
+        None
+    }
+
+    fn is_filtered(remote_authority: &str, filter: &FilterOptions) -> bool {
+        match Remote::get_remote_authority(remote_authority) {
+            Some(remote) => match remote {
+                Remote::Wsl => filter.show_wsl,
+                Remote::Devcontainer => filter.show_dev_container,
+                Remote::Ssh => filter.show_ssh,
+                _ => true,
+            },
+            None => true,
+        }
     }
 }
 
@@ -88,7 +117,7 @@ fn _rich_text_with_black(text: &str) -> RichText {
 }
 impl From<Remote> for String {
     fn from(val: Remote) -> Self {
-        val.to_string()
+        val.get_proto().to_string()
     }
 }
 
@@ -184,6 +213,12 @@ impl epi::App for Toolbox {
                     );
                 });
             });
+            self.pinned.retain(|(entry, instance)| {
+                match Toolbox::show_entry_to_ui(ui, entry, *instance, true) {
+                    Action::Unpin(_) => false,
+                    _ => true,
+                }
+            });
             ScrollArea::vertical().show(ui, |ui| {
                 self.cached
                     .iter()
@@ -203,27 +238,18 @@ impl epi::App for Toolbox {
                     .for_each(|vscode_entry| {
                         vscode_entry.entry_list.entries.iter().for_each(|entry| {
                             if entry.folder_uri.is_some() {
-                                let file = &entry.folder_uri.as_ref().unwrap().to_owned();
-                                let parsed = urlparse::urlparse(file);
-                                let folder_uri = file.clone();
-                                let file = parsed.path.clone();
-                                let show_entry = if file
+                                let folder_uri = &entry.folder_uri.as_ref().unwrap().to_owned();
+                                let just_path = urlparse::urlparse(folder_uri).path;
+                                let show_entry = if just_path
                                     .to_lowercase()
-                                    .contains(&self.filter_options.search_text)
+                                    .contains(&self.filter_options.search_text.to_lowercase())
                                 {
                                     if entry.remote_authority.is_some() {
-                                        let remote_authority =
-                                            &entry.remote_authority.as_ref().unwrap();
-                                        if remote_authority.starts_with("ssh") {
-                                            self.filter_options.show_ssh
-                                        } else if remote_authority.starts_with("dev-container") {
-                                            self.filter_options.show_dev_container
-                                        } else if remote_authority.starts_with("wsl") {
-                                            self.filter_options.show_wsl
-                                        } else {
-                                            true
-                                        }
-                                    } else if folder_uri.starts_with("vscode-vfs") {
+                                        Remote::is_filtered(
+                                            &entry.remote_authority.as_ref().unwrap(),
+                                            &self.filter_options,
+                                        )
+                                    } else if just_path.starts_with("vscode-vfs") {
                                         self.filter_options.show_remote_repositories
                                     } else {
                                         self.filter_options.show_host
@@ -232,54 +258,26 @@ impl epi::App for Toolbox {
                                     false
                                 };
                                 if show_entry {
-                                    ui.separator();
-                                    ui.horizontal(|ui| {
-                                        let file_name = Path::new(&parsed.path).file_name();
-                                        if file_name.is_some() {
-                                            let label = Label::new(WidgetText::RichText(
-                                                RichText::from(
-                                                    file_name.unwrap().to_str().unwrap(),
-                                                )
-                                                .code()
-                                                .strong()
-                                                .heading()
-                                                .size(20.0),
-                                            ));
-                                            label.ui(ui);
-                                        } else {
-                                            let label = Label::new(WidgetText::RichText(
-                                                RichText::from(parsed.path).size(20.0),
-                                            ));
-                                            label.ui(ui);
-                                        }
-                                        let label: Remote = if entry.remote_authority.is_some() {
-                                            let remote_authority =
-                                                &entry.remote_authority.as_ref().unwrap();
-                                            if remote_authority.starts_with("wsl") {
-                                                Remote::Wsl
-                                            } else if remote_authority.starts_with("dev-container")
-                                            {
-                                                Remote::Devcontainer
-                                            } else if remote_authority.starts_with("ssh") {
-                                                Remote::Ssh
-                                            } else {
-                                                Remote::Unknown
-                                            }
-                                        } else {
-                                            Remote::Windows
+                                    // folder is unpinned
+                                    // so it should appear
+                                    if self
+                                        .pinned
+                                        .iter()
+                                        .find(|(pinned_entry, _instance)| pinned_entry == entry)
+                                        .is_none()
+                                    {
+                                        if let Action::Pin(_folder_uri) = Toolbox::show_entry_to_ui(
+                                            ui,
+                                            entry,
+                                            vscode_entry.installation,
+                                            false, // unpinned
+                                        ) {
+                                            self.pinned.insert(
+                                                0,
+                                                (entry.clone(), vscode_entry.installation),
+                                            );
                                         };
-                                        ui.label(label.to_string());
-                                        ui.horizontal(|ui| {
-                                            let button = ui.button("open");
-                                            if button.clicked() {
-                                                open_window(
-                                                    &folder_uri,
-                                                    &vscode_entry.installation,
-                                                );
-                                            }
-                                        });
-                                        Label::new(file).ui(ui);
-                                    });
+                                    }
                                 }
                             }
                         });
@@ -319,5 +317,70 @@ impl epi::App for Toolbox {
 
     fn warm_up_enabled(&self) -> bool {
         false
+    }
+}
+
+enum Action {
+    Unpin(String),
+    Pin(String),
+    NoAction,
+}
+
+impl Toolbox {
+    fn show_entry_to_ui(
+        ui: &mut egui::Ui,
+        entry: &Entry,
+        instance: VscodeInstances,
+        pinned: bool,
+    ) -> Action {
+        let folder_uri = &entry.folder_uri.as_ref().unwrap();
+        let parsed_path = urlparse::urlparse(folder_uri).path;
+        let parsed_path = parsed_path.as_str();
+        let mut return_val = Action::NoAction;
+        ui.separator();
+        ui.horizontal(|ui| {
+            let file_name = Path::new(parsed_path).file_name();
+            if file_name.is_some() {
+                let label = Label::new(WidgetText::RichText(
+                    RichText::from(file_name.unwrap().to_str().unwrap())
+                        .code()
+                        .strong()
+                        .heading()
+                        .size(20.0),
+                ));
+                label.ui(ui);
+            } else {
+                let label =
+                    Label::new(WidgetText::RichText(RichText::from(parsed_path).size(20.0)));
+                label.ui(ui);
+            }
+            let label: Remote = if entry.remote_authority.is_some() {
+                match Remote::get_remote_authority(&entry.remote_authority.as_ref().unwrap()) {
+                    Some(remote) => remote,
+                    None => Remote::Unknown,
+                }
+            } else {
+                Remote::Windows
+            };
+            ui.label(label.get_proto());
+            ui.horizontal(|ui| {
+                let button = ui.button("open");
+                if button.clicked() {
+                    open_window(&(folder_uri), instance);
+                }
+            });
+            if pinned {
+                // it should be an image instead of button
+                if ui.button("unpin").clicked() {
+                    return_val = Action::Unpin(parsed_path.to_string())
+                }
+            } else {
+                if ui.button("pin").clicked() {
+                    return_val = Action::Pin(parsed_path.to_string())
+                }
+            };
+            Label::new(parsed_path).ui(ui);
+        });
+        return_val
     }
 }

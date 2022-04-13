@@ -2,7 +2,7 @@ use std::process::Command;
 
 use crate::vscode::VscodeInstances;
 
-pub fn open_window(file: &str, installation: &VscodeInstances) {
+pub fn open_window(file: &str, installation: VscodeInstances) {
     let subcommand = format!(
         "{executable} --folder-uri {file}",
         executable = installation.get_executable()

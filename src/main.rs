@@ -7,10 +7,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
     use vs_toolbox::Toolbox;
-    let toolbox = Toolbox {
-        cached: Default::default(),
-        filter_options: Default::default(),
-    };
+    let toolbox: Toolbox = Default::default();
     let native_options = eframe::NativeOptions::default();
     eframe::run_native(Box::new(toolbox), native_options);
 }

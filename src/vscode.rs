@@ -8,7 +8,7 @@ use strum::IntoEnumIterator;
 
 use rusqlite::Connection;
 
-#[derive(EnumIter, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
+#[derive(EnumIter, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize, Clone, Copy)]
 pub enum VscodeInstances {
     Vscode,
     VscodeInsiders,
@@ -36,7 +36,7 @@ impl VscodeInstances {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
     #[serde(rename = "folderUri")]
     pub folder_uri: Option<String>,
@@ -45,7 +45,7 @@ pub struct Entry {
     #[serde(rename = "remoteAuthority")]
     pub remote_authority: Option<String>,
 }
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct Workspace {
     id: String,
     #[serde(rename = "configPath")]
